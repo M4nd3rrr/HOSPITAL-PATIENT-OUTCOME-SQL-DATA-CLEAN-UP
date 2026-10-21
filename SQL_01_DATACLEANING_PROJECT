@@ -1,0 +1,59 @@
+/*
+PROJECT: Hospital Outcomes Data Cleaning
+
+PHASE 1: Deduplication and Data Standardization
+
+OBJECTIVES:
+1. Retain the most recent record for each patient-encounter combination.
+2. Standardize inconsistent categorical values.
+3. Handle selected missing values.
+4. Prepare the data for subsequent validation and analysis.
+
+SOURCE TABLE:
+dbo.unclean_patient_outcomes_100k
+
+SQL TECHNIQUES:
+ROW_NUMBER(), CASE, TRIM(), COALESCE()
+
+NOTE:
+This query returns a cleaned result set without modifying the
+original source table.
+*/
+
+SELECT Encounter_ID, Patient_ID, Admission_Date,
+COALESCE(Age,0)Age, CASE WHEN TRIM(Sex) IN ('F','Fem') THEN 'Female'
+					WHEN TRIM(Sex) = 'M' THEN 'Male'
+					ELSE COALESCE(TRIM(Sex),'N/A') 
+		END Sex,	
+		CASE WHEN TRIM(department) IN ('I.C.U.', 'Intensive Care') THEN 'ICU'
+								WHEN TRIM(department) = 'Med Ward' THEN 'Medical Ward'
+								WHEN TRIM(department) = 'Surgery Ward' THEN 'Surgical Ward'
+								WHEN TRIM(department) IN ('PEDS', 'Pediatrics') THEN 'Paediatrics'
+								WHEN TRIM(department) IN  ('Accident & Emergency','ER') THEN 'Emergency'
+								WHEN TRIM(department) = 'out patient' THEN 'Outpatient'
+								ELSE COALESCE(TRIM(department), 'N/A') 
+		END Department,
+		COALESCE(Diagnosis, 'N/A')Diagnosis, 
+		COALESCE(Treatment_Type,'N/A')Treatment_Type,
+		CASE WHEN TRIM(Treatment_Status) IN ('Complete','DONE') THEN 'Completed'
+										WHEN TRIM(Treatment_Status) = 'stopped' THEN 'Discontinued'
+										WHEN TRIM(Treatment_Status) IN ('In progress','Pending') THEN 'Ongoing'
+										ELSE COALESCE(TRIM(Treatment_Status), 'N/A')
+		END Treatment_Status, 
+		Discharge_Date,
+		CASE WHEN TRIM(Outcome) IN ('DECEASED','Dead','Died','Expired') THEN 'Deceased'
+							WHEN TRIM(Outcome) = 'Worsened' THEN 'Deteriorated'
+							WHEN TRIM(Outcome) = 'transfer' THEN 'Transferred'
+							WHEN TRIM(Outcome) = 'Cured' THEN 'Recovered'
+							WHEN TRIM(Outcome) = 'Getting Better' THEN 'Improved'
+							WHEN TRIM(Outcome) = 'No change' THEN 'Unchanged'
+							ELSE COALESCE(TRIM(Outcome),'N/A') 
+		END Outcome,
+	 Readmitted_Within_30_Days,
+Length_of_Stay_Days,
+Follow_Up_Required,
+Follow_Up_Completed
+FROM(
+	SELECT*, ROW_NUMBER () OVER (PARTITION BY Encounter_ID,Patient_ID ORDER BY COALESCE(Admission_Date, '1900-01-01') DESC)HD
+	FROM dbo.unclean_patient_outcomes_100k)F
+WHERE HD = 1
